@@ -1,100 +1,151 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const { getAllEnvelopeItems, addNewItem, getItemById, updateItem, deleteItem, moveItem } = require('../data/data.js');
 
 const itemsRouter = express.Router({ mergeParams: true });
 
 itemsRouter.param('itemId', (req, res, next, id) => {
   //Check :itemId parameter is number
-  if (Number.isInteger(Number(id))) {
+  if (Number.isInteger(Number(id)) && Number(id) >= 0) {
     next();
   } else {
-    next(new Error("Item id should be number."))
+    res.status(400);
+    next(new Error("Item id should be a positive integer."))
   }
 })
 
-itemsRouter.get('/', (req, res, next) => {
+itemsRouter.param('destEnvId', (req, res, next, id) => {
+  if (Number.isInteger(Number(id)) && Number(id) >= 0) {
+    next();
+  } else {
+    res.status(400);
+    next(new Error("Destination envelope id should be a positive integer."))
+  }
+})
+
+itemsRouter.use(bodyParser.json());
+
+itemsRouter.use(
+  bodyParser.urlencoded({
+    extended: true
+  })
+)
+
+// GET all items in envelope
+itemsRouter.get('/', async (req, res, next) => {
   //Request for all items in envelope
-  const output = getAllEnvelopeItems(req.params.envId);
-  if (typeof output === 'string') {
-    next(new Error(output));
-  } else {
-    res.status(200).send(output);
+  try {
+    const output = await getAllEnvelopeItems(req.params.envId);
+    if (output) {
+      res.status(200).json(output.rows);
+    }
+  } catch (err) {
+    res.status(err.statusCode || 500);
+    next(err);
   }
 })
 
-itemsRouter.post('/', (req, res, next) => {
-  //Add item to envelope
+//Add new item to envelope
+itemsRouter.post('/', async (req, res, next) => {
   if (req.query.name && req.query.cost) {
-    const newItem = addNewItem(req.params.envId, {
-      name: req.query.name,
-      cost: req.query.cost
-    })
-    if (newItem.id) {
-      res.status(201).send(newItem);
-    } else {
-      next(new Error(newItem));
+    try {
+      const newItem = await addNewItem(req.params.envId, {
+        name: req.query.name,
+        cost: req.query.cost
+      })
+      if (newItem) {
+        res.status(201).json(newItem.rows[0]);
+      }
+    } catch (err) {
+      res.status(err.statusCode || 500);
+      next(err);
     }
   } else {
-    next(new Error(`Missing required parameters: ${!req.query.name ? "name " : ""} ${!req.query.cost ? "cost " : ""}`));
+    res.status(400);
+    next(new Error(`Missing required parameters: ${!req.query.name ? "name," : ""} ${!req.query.cost ? "cost," : ""}`.slice(0, -1)));
   }
 })
 
-itemsRouter.get('/:itemId', (req, res, next) => {
-  //Request for specific item in envelope
-  const newItem = getItemById(req.params.envId, req.params.itemId);
-  if (newItem.id) {
-    res.status(200).send(newItem);
-  } else {
-    next(new Error(newItem));
+// GET specific item
+itemsRouter.get('/:itemId', async (req, res, next) => {
+  try {
+    const output = await getItemById(req.params.envId, req.params.itemId);
+    if (output) {
+      res.status(200).json(output);
+    }
+  } catch (err) {
+    res.status(err.statusCode || 500);
+    next(err);
   }
 })
 
-itemsRouter.put('/:itemId', (req, res, next) => {
-  //Replace item in envelope
+// Update item in envelope (all fields required); Returns updated item
+itemsRouter.put('/:itemId', async (req, res, next) => {
   if (req.query.name && req.query.cost) {
-    const output = updateItem(req.params.envId, req.params.itemId, req.query);
-    if (typeof output === 'string') {
-      next(new Error(output));
-    } else {
-      res.status(200).send(output);
+    try {
+      const updatedItem = await updateItem(req.params.envId, req.params.itemId, req.query);
+      if (updatedItem) {
+        res.status(200).json(updatedItem);
+      }
+    } catch (err) {
+      res.status(err.statusCode || 500);
+      next(err);
     }
   } else {
-    next(new Error("Missing required parameters (name/cost)"))
+    res.status(400);
+    next(new Error(`Missing required parameters: ${!req.query.name ? "name," : ""} ${!req.query.cost ? "cost," : ""}`.slice(0, -1)));
   }
 })
 
-itemsRouter.patch('/:itemId', (req, res, next) => {
-  //Update item in envelope
+// Update envelope (any fields); Returns updated envelope
+itemsRouter.patch('/:itemId', async (req, res, next) => {
   if (req.query.name || req.query.cost) {
-    const output = updateItem(req.params.envId, req.params.itemId, req.query);
-    if (typeof output === 'string') {
-      next(new Error(output));
-    } else {
-      res.status(200).send(output);
+    try {
+      const updatedItem = await updateItem(req.params.envId, req.params.itemId, req.query);
+      if (updatedItem) {
+        res.status(200).json(updatedItem);
+      }
+    } catch (err) {
+      res.status(err.statusCode || 500);
+      next(err);
     }
   } else {
+    res.status(400);
     next(new Error("No valid parameters found (name/cost)"))
   }
 })
 
-itemsRouter.patch('/:itemId/move/:destEnvId', (req, res, next) => {
-  //Move item
-  const output = moveItem(req.params.envId, req.params.itemId, req.params.destEnvId);
-  if (output.id) {
-    res.status(200).send(output);
+//Move item between envelopes; Returns the updated item
+itemsRouter.patch('/:itemId/moveto/:destEnvId', async (req, res, next) => {
+  if (req.params.envId !== req.params.destEnvId) {
+    try {
+      const updatedItem = await moveItem(req.params.envId, req.params.itemId, req.params.destEnvId);
+      if (updatedItem)
+        res.status(200).json(updatedItem);
+    } catch (err) {
+      res.status(err.statusCode || 500);
+      next(err);
+    }
   } else {
-    next(new Error(output));
+    res.status(400);
+    next(new Error("Source and destination envelopes cannot be the same."));
   }
 })
 
-itemsRouter.delete('/:itemId', (req, res, next) => {
-  //Delete item from envelope
-  const output = deleteItem(req.params.envId, req.params.itemId);
-  if (!output) {
-    res.status(202).send();
-  } else {
-    next(new Error(output));
+//Delete item from envelope
+itemsRouter.delete('/:itemId', async (req, res, next) => {
+  try {
+    await deleteItem(req.params.envId, req.params.itemId);
+    res.status(204).send();
+  } catch (err) {
+    res.status(err.statusCode || 500);
+    next(err);
   }
 })
+
+itemsRouter.use((err, req, res, next) => {
+  res.status(res.statusCode || err.status || 400).send(err.message || 'An error has occured');
+})
+
 
 module.exports = itemsRouter;

@@ -1,307 +1,416 @@
-const DATA = [
-  {
-    id: 3,
-    name: 'Groceries',
-    description: 'Groceries expenses',
-    budget: 200,
-    items: [
-      {
-        id: 1,
-        name: 'Weekly groceries',
-        cost: 190
-      }
-    ]
-  },
-  {
-    id: 1,
-    name: 'Travel',
-    description: 'Travel expenses',
-    budget: 100,
-    items: [
-      {
-        id: 3,
-        name: 'Train to London',
-        cost: 10
-      },
-      {
-        id: 1,
-        name: 'Train from London',
-        cost: 15
-      }
-    ]
-  }
-];
+const { query } = require('./db.js');
 
+//Database Queries
+
+// GET ./
 function getAllEnvelopes() {
-  return DATA;
+  const result = query('SELECT * FROM categories ORDER BY id ASC');
+  return result;
 }
 
-function getEnvelopeIndexById(envId) {
-  for (let index in DATA) {
-    if (DATA[index].id === Number(envId)) {
-      return index;
-    }
+// GET ./:envId
+async function getEnvelope(envId) {
+  const result = await query('SELECT * FROM categories WHERE id = $1', [envId])
+  if (!result.rowCount) {
+    const err = new Error(`No such envelope ID ${envId}`);
+    err.statusCode = 400;
+    throw (err);
   }
+  return result.rows[0];
+}
+
+// POST ./
+async function addNewEnvelope(envelope) {
+  //Check budget is a number
+  if (isNaN(envelope.budget)) {
+    const err = new Error("The budget value has to be a number");
+    err.statusCode = 400;
+    throw (err);
+  }
+  //Check budget is not negative
+  if (Number(envelope.budget) < 0) {
+    const err = new Error("The budget value cannot be negative");
+    err.statusCode = 400;
+    throw (err);
+  }
+  //Check name is unique
+  const checkNameIsUnique = await checkValueIsUnique("categories", "name", envelope.name);
+  if (checkNameIsUnique.rowCount) {
+    const err = new Error("The envelope name has to be unique")
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  const lastId = await getLastId("categories");
+  const newId = lastId.rows[0].max + 1;
+  const result = await query('INSERT INTO categories VALUES ($1, $2, $3, $4) RETURNING *', [newId, envelope.name, envelope.description, Number(envelope.budget)]);
+  logTransaction(newId, `Envelope ${newId} '${envelope.name}' created with budget ${envelope.budget}`);
+  return result;
+}
+
+// DELETE ./:envId
+async function deleteEnvelope(envId) {
+  //Check envelope exists
+  const envelope = await getEnvelope(envId);
+  //Check if envelope has items
+  const envSpend = await getSpendInEnvelope(envId);
+  if(envSpend.rows[0].total_cost) {
+    const err = new Error("Envelope has items")
+    err.statusCode = 400;
+    throw (err);
+  }
+  await query('DELETE FROM categories WHERE id = $1', [envId]);
+  logTransaction(envId, `Envelope ${envId} '${envelope.name}' deleted`);
   return null;
 }
 
-function getEnvelope(envId) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
-  return DATA[envIndex];
-}
-
-function addNewEnvelope(envelope) {
-  //Check to see if budget is a number
-  if (!Number(envelope.budget)) {
-    return "The budget value has to be a number";
-  }
-  //Check to see if name is unique
-  for (let envelopeIndex in DATA) {
-    if (DATA[envelopeIndex].name.toLowerCase() === envelope.name.toLowerCase()) {
-      return "An envelope with the same name already exists";
-    }
-  }
-  const newId = getNewId(DATA);
-  DATA.push({
-    id: newId,
-    name: envelope.name,
-    description: envelope.description,
-    budget: Number(envelope.budget),
-    items: []
-  })
-  return DATA[getIndexById(DATA, newId)];
-}
-
-function deleteEnvelope(envId) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if(!envIndex) {
-    return "No such envelope"
-  }
-  DATA.splice(envIndex,1);
-  console.log(DATA);
-  return null;
-}
-
-function updateEnvelope(envId, data) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
+// PUT+PATCH ./:envId
+async function updateEnvelope(envId, data) {
+  //Checks before any query
   if (data.budget) {
     //Check if new budget value is a number
-    if (!Number(data.budget)) {
-      return "The budget value has to be a number";
+    if (isNaN(data.budget)) {
+      const err = new Error("The budget value has to be a number");
+      err.statusCode = 400;
+      throw (err);
     }
-    data.budget = Number(data.budget);
-    //Check if new budget value exceeds items total
-    const itemsTotal = sumOfEnvelopeItems(envIndex);
-    if (data.budget < itemsTotal) {
-      return `The budget value cannot be less than ${itemsTotal}`;
+    //Check budget is not negative
+    if (Number(data.budget) < 0) {
+      const err = new Error("The budget value cannot be negative");
+      err.statusCode = 400;
+      throw (err);
     }
-    DATA[envIndex].budget = data.budget;
   }
-  if (data.name) {
-    for (let envelopeIndex in DATA) {
-      if (DATA[envelopeIndex].name.toLowerCase() === data.name.toLowerCase()) {
-        return "An envelope with the same name already exists";
+  let isValidChange = false;
+  let budgetDecrease = false;
+  //Check envelope exists
+  const currentEnvelope = await getEnvelope(envId);
+  //Convert budget value to number
+  const currentBudget = Number(currentEnvelope.budget.replace(/[^0-9.-]+/g, ""));
+  if (data.budget && Number(data.budget) !== currentBudget) {
+    if (Number(data.budget) < currentBudget) {
+      //Check new budget is higher than total cost of existing items in the envelope
+      const envBudgetInfo = await getSpendInEnvelope(envId);
+      const { total_cost } = envBudgetInfo.rows[0];
+      const totalCost = total_cost === null ? 0 : Number(total_cost.replace(/[^0-9.-]+/g, ""));
+      if (Number(data.budget) < totalCost) {
+        const err = new Error(`The budget value has to be at least ${total_cost}`);
+        err.statusCode = 400;
+        throw (err);
       }
+      budgetDecrease = true;
     }
-    DATA[envIndex].name = data.name;
+    isValidChange = true;
   }
-  if (data.description) DATA[envIndex].description = data.description;
-  
-  return DATA[envIndex];
-}
-
-function transferBudget(srcEnvelopeId, destEnvelopeId, amount) {
-  if (srcEnvelopeId === destEnvelopeId)
-    return "Source and destination envelopes cannot be the same"
-
-  const srcEnvelopeIndex = getEnvelopeIndexById(srcEnvelopeId);
-  if (!srcEnvelopeIndex) {
-    return "No such source envelope"
-  }
-
-  if (!Number(amount)) {
-    return "The amount to be transfered has to be a number";
-  }
-  amount = Number(amount);
-  const budgetAvailable = DATA[srcEnvelopeIndex].budget - sumOfEnvelopeItems(srcEnvelopeIndex);
-  if (budgetAvailable === 0) {
-    return "No budget available to transfer"
-  }
-
-  const destEnvelopeIndex = getEnvelopeIndexById(destEnvelopeId);
-  if (!destEnvelopeIndex) {
-    return "No such destination envelope"
-  }
-
-  //Check if amount is available in source envelope
-  if (budgetAvailable < amount) {
-    return `Cannot transfer more than ${budgetAvailable}`;
-  }
-
-  DATA[srcEnvelopeIndex].budget -= amount;
-  DATA[destEnvelopeIndex].budget += amount;
-  
-  return null
-}
-
-function getAllEnvelopeItems(envId) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
-  return DATA[envIndex].items;
-}
-
-function addNewItem(envId, item) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
-  const newId = getNewId(DATA[envIndex].items);
-  
-  if (!Number(item.cost)) {
-    return "The budget value has to be a number";
-  }
-  item.cost = Number(item.cost);
-  const currentItemsTotal = sumOfEnvelopeItems(envIndex);
-  if (item.cost > 0 && DATA[envIndex].budget - currentItemsTotal === 0) {
-    return `No available budget for envelope ${DATA[envIndex].name}`;
-  }
-  
-  if (currentItemsTotal + item.cost > DATA[envIndex].budget) {
-    return `Can't exceed available envelope budget of ${DATA[envIndex].budget - currentItemsTotal}`
-  }
-  DATA[envIndex].items.push({
-    ...item,
-    id: newId
-  });
-  return DATA[envIndex].items[DATA[envIndex].items.length-1];
-}
-
-function getItemById(envId, itemId) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
-  const itemIndex = getItemIndexById(envIndex, itemId);
-  if (!itemIndex) {
-    return "No such item"
-  }
-  return DATA[envIndex].items[itemIndex];
-}
-
-function getItemIndexById(envIndex, itemId) {
-  for (let index in DATA[envIndex].items) {
-    if (DATA[envIndex].items[index].id === Number(itemId)) {
-      return index;
+  if (data.name && data.name !== currentEnvelope.name) {
+    //Check new name doesn't already exist
+    const checkNameIsUnique = await checkValueIsUnique("categories", "name", data.name);
+    if (checkNameIsUnique.rowCount && checkNameIsUnique.rows[0].id !== currentEnvelope.id) {
+      const err = new Error("The envelope name has to be unique")
+      err.statusCode = 400;
+      throw (err);
     }
+    isValidChange = true;
   }
-  return null;
+  if (data.description && data.description !== currentEnvelope.description)
+    isValidChange = true;
+
+  if (!isValidChange) {
+    const err = new Error("Nothing to be updated")
+    err.statusCode = 400;
+    throw (err);
+  }
+  let statement = 'UPDATE categories SET';
+  let transactionDescription = `Envelope ${currentEnvelope.id}`;
+  if (data.name && data.name !== currentEnvelope.name) {
+    statement += ` name = '${data.name}',`;
+    transactionDescription += ` changed name from '${currentEnvelope.name}' to '${data.name}',`;
+  } else {
+    transactionDescription += ` '${currentEnvelope.name}'`;
+  }
+
+  if (data.description && data.description !== currentEnvelope.description) {
+    statement += ` description = '${data.description}',`;
+    transactionDescription += ` description changed from '${currentEnvelope.description}' to '${data.description}',`;
+  }
+
+  if (data.budget && Number(data.budget) !== currentBudget)
+    statement += ` budget = '${data.budget}',`;
+    transactionDescription += ` budget ${budgetDecrease ? 'decreased' : 'increased'} from ${currentBudget} to ${data.budget},`;
+
+  statement = statement.slice(0, -1) + ` WHERE id = ${currentEnvelope.id} RETURNING *;`;
+  const result = await query(statement);
+  logTransaction(currentEnvelope.id, transactionDescription.slice(0, -1));
+  return result.rows[0];
 }
 
-function updateItem(envId, itemId, data) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
+// PATCH ./:endId/transferto/:destEnvId
+async function transferBudget(srcEnvelopeId, destEnvelopeId, amount) {
+  //Checks before any query
+  //Check if source and destination IDs are different
+  if (srcEnvelopeId === destEnvelopeId) {
+    const err = new Error("Source and destination envelopes cannot be the same");
+    err.statusCode = 400;
+    throw (err);
   }
-  const itemIndex = getItemIndexById(envIndex, itemId);
-  if (!itemIndex) {
-    return "No such item"
+  //Check if amount is a number
+  if (isNaN(amount)) {
+    const err = new Error("The amount value has to be a number");
+    err.statusCode = 400;
+    throw (err);
   }
+
+  //Check if amount is gt 0
+  if (Number(amount) <= 0) {
+    const err = new Error("The amount value has to be a positive number");
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  //Get the 2 envelopes
+  const scopedEnvelopes = await query("SELECT * FROM categories WHERE id IN ($1, $2) ORDER BY id;", [srcEnvelopeId, destEnvelopeId]);
+
+  //Check if 2 envelopes exist
+  if (scopedEnvelopes.rowCount < 2) {
+    const err = new Error();
+    err.statusCode = 400;
+    if (scopedEnvelopes.rowCount === 0) {
+      err.message = "Non-existent envelopes";
+      throw (err);
+    }
+    if (scopedEnvelopes.rows[0].id === Number(srcEnvelopeId)) {
+      err.message = "Destination envelope does not exist";
+      throw (err);
+    }
+    err.message = "Source envelope does not exist";
+    throw (err);
+  }
+  const srcIndex = scopedEnvelopes.rows[0].id === Number(srcEnvelopeId) ? 0 : 1;
+  const destIndex = srcIndex === 0 ? 1 : 0;
+  const srcBudget = Number(scopedEnvelopes.rows[srcIndex].budget.replace(/[^0-9.-]+/g, ""));
+  const destBudget = Number(scopedEnvelopes.rows[destIndex].budget.replace(/[^0-9.-]+/g, ""));
+
+  //Check available budget in source envelope
+  const srcEnvBudgetInfo = await getSpendInEnvelope(srcEnvelopeId);
+  const { total_cost } = srcEnvBudgetInfo.rows[0];
+  const srcEnvSpend = total_cost === null? 0 : Number(total_cost.replace(/[^0-9.-]+/g, ""));
+  if (srcBudget - srcEnvSpend < Number(amount)) {
+    const err = new Error(`Maximum available to transfer is ${srcBudget - srcEnvSpend}`);
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  const srcEnvelope = await query("UPDATE categories SET budget = $1 WHERE id = $2 RETURNING *", [srcBudget - Number(amount), srcEnvelopeId]);
+  const destEnvelope = await query("UPDATE categories SET budget = $1 WHERE id = $2 RETURNING *", [destBudget + Number(amount), destEnvelopeId]);
+  logTransaction(srcEnvelopeId, `${amount} transferred from ${srcEnvelopeId} '${scopedEnvelopes.rows[srcIndex].name}' to ${destEnvelopeId} '${scopedEnvelopes.rows[destIndex].name}'.`)
+  return [srcEnvelope.rows[0], destEnvelope.rows[0]];
+}
+
+// GET ./:envId/Items
+async function getAllEnvelopeItems(envId) {
+  //Check envelope id
+  const envelope = await getEnvelope(envId);
+  const result = query('SELECT * FROM items WHERE category_id = $1', [envId]);
+  return result;
+}
+
+// POST ./:envId/items
+async function addNewItem(envId, { name, cost }) {
+  //Check envelope id
+  const envelope = await getEnvelope(envId);
+  if (isNaN(cost)) {
+    const err = new Error("Cost should be a number");
+    err.statusCode = 400;
+    throw (err);
+  }
+  if (Number(cost) <= 0) {
+    const err = new Error("Cost should be a positive number");
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  //Check cost against available budget in the envelope
+  const envBudgetInfo = await getSpendInEnvelope(envId);
+  const { total_cost } = envBudgetInfo.rows[0];
+  const totalCost = total_cost === null ? 0 : Number(total_cost.replace(/[^0-9.-]+/g, ""));
+  const envBudget = Number(envelope.budget.replace(/[^0-9.-]+/g, ""));
+  const availableBudget = envBudget - totalCost;
+  if (availableBudget < Number(cost)) {
+    const err = new Error(`Available budget in envelope is ${availableBudget}`);
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  //Get next available sub_id
+  const lastSubId = await getLastId('items', 'sub_id', Number(envId), 'category_id');
+  const newSubId = lastSubId.rows[0].max + 1;
+
+  const result = await query('INSERT INTO items VALUES ($1, $2, $3, $4) RETURNING *', [newSubId, name, cost, envId]);
+  logTransaction(envId, `Item ${newSubId} '${name}' (cost ${cost}) added to category ${envId} '${envelope.name}'`);
+  return result
+}
+
+// GET ./envelopes/:envId/items/:itemId
+async function getItemById(envId, itemId) {
+  //Check if envelope exists
+  await getEnvelope(envId);
+  const result = await query('SELECT * FROM items WHERE sub_id = $1 AND category_id = $2', [itemId, envId]);
+  if (!result.rowCount) {
+    const err = new Error("No such item.");
+    err.statusCode = 400;
+    throw (err);
+  }
+  return result.rows[0];
+}
+
+// PUT+PATCH ./:envId/items/:itemId
+async function updateItem(envId, itemId, data) {
+  //Checks before any query
   if (data.cost) {
-    //Check if new cost is number
-    if (!Number(data.cost)) {
-      return "The cost value has to be a positive number";
+    //Check cost is a number
+    if (isNaN(data.cost)) {
+      const err = new Error("The cost value has to be a number");
+      err.statusCode = 400;
+      throw (err);
     }
-    data.cost = Number(data.cost);
-    //Check if new cost value exceeds available budget
-    const itemsTotal = sumOfEnvelopeItems(envIndex);
-    const budgetForItem = DATA[envIndex].budget - itemsTotal + DATA[envIndex].items[itemIndex].cost;
-    if (budgetForItem - data.cost < 0) {
-      return `The cost value cannot be more than ${budgetForItem}`;
+    //Check cost is not negative
+    if (Number(data.cost) <= 0) {
+      const err = new Error("The cost value has to be a positive number");
+      err.statusCode = 400;
+      throw (err);
     }
-    DATA[envIndex].items[itemIndex].cost = data.cost;
   }
-  if (data.name) {
-    DATA[envIndex].items[itemIndex].name = data.name;
+  let isValidChange = false;
+  let costIncrease = false;
+  //Check envelope and item exist
+  const currentItem = await getItemById(envId, itemId);
+  const currentItemCost = Number(currentItem.cost.replace(/[^0-9.-]+/g, ""));
+  if (data.cost && Number(data.cost) !== currentItemCost) {
+    if (Number(data.cost) > currentItemCost) {
+      //Check there's enough budget for the cost increase
+      const envelope = await getEnvelope(envId);
+      const envBudget = Number(envelope.budget.replace(/[^0-9.-]+/g, ""));
+
+      const envBudgetInfo = await getSpendInEnvelope(envId);
+      const { total_cost } = envBudgetInfo.rows[0];
+      const totalCost = total_cost === null ? 0 : Number(total_cost.replace(/[^0-9.-]+/g, ""));
+
+      if (envBudget - totalCost < Number(data.cost) - currentItemCost) {
+        const err = new Error(`New cost cannot exceed ${envBudget - totalCost + currentItemCost} `);
+        err.statusCode = 400;
+        throw (err);
+      }
+      costIncrease = true;
+    }
+    isValidChange = true
   }
-  return DATA[envIndex].items[itemIndex];
+  if (data.name && data.name !== currentItem.name)
+    isValidChange = true
+
+  if (!isValidChange) {
+    const err = new Error("Nothing to be updated")
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  let statement = 'UPDATE items SET';
+  let transactionDescription = `Item ${itemId}`
+  if (data.name && data.name !== currentItem.name) {
+    statement += ` name = '${data.name}',`;
+    transactionDescription += ` changed name from '${currentItem.name}' to '${data.name}',`
+  } else {
+    transactionDescription += ` '${currentItem.name}'`;
+  }
+
+  if (data.cost && Number(data.cost) !== currentItemCost) {
+    statement += ` cost = '${data.cost}',`;
+    transactionDescription += ` cost ${costIncrease ? 'increased':'decreased'} from ${currentItemCost} to ${data.cost},`
+  }
+
+  statement = statement.slice(0, -1) + `WHERE sub_id = ${itemId} AND category_id = ${envId} RETURNING *;`;
+  const result = await query(statement);
+  logTransaction(envId, transactionDescription.slice(0,-1));
+  return result.rows[0];
 }
 
-function deleteItem(envId, itemId) {
-  const envIndex = getEnvelopeIndexById(envId);
-  if (!envIndex) {
-    return "No such envelope"
-  }
-  const itemIndex = getItemIndexById(envIndex, itemId);
-  if (!itemIndex) {
-    return "No such item"
-  }
-  DATA[envIndex].items.splice(itemIndex,1);
+// DELETE ./:envId/items/:itemId
+async function deleteItem(envId, itemId) {
+  //Check item exists
+  const item = await getItemById(envId, itemId);
+  await query('DELETE FROM items WHERE sub_id = $1 AND category_id = $2', [itemId, envId]);
+  logTransaction(envId, `Item ${itemId} '${item.name}' deleted`);
   return null;
 }
 
-function moveItem(srcEnvelopeId, itemId, destEnvelopeId) {
-  const srcEnvelopeIndex = getEnvelopeIndexById(srcEnvelopeId);
-  if (!srcEnvelopeIndex) {
-    return "No such source envelope"
-  }
-  const itemIndex = getItemIndexById(srcEnvelopeIndex, itemId);
-  if (!itemIndex) {
-    return "No such item in source envelope"
-  }
-  const destEnvelopeIndex = getEnvelopeIndexById(destEnvelopeId);
-  if (!destEnvelopeIndex) {
-    return "No such destination envelope"
-  }
-  const destBudgetAvailable = DATA[destEnvelopeIndex].budget - sumOfEnvelopeItems(destEnvelopeIndex);
-  if (destBudgetAvailable < DATA[srcEnvelopeIndex].items[itemIndex].cost) {
-    return "Not enough available budget in destination envelope"
-  }
-  //Generate new id in destination envelope
-  const newItemId = getNewId(DATA[destEnvelopeIndex].items);
-  
-  //Add item to destination envelope
-  DATA[destEnvelopeIndex].items.push({...DATA[srcEnvelopeIndex].items[itemIndex], id: newItemId})
+// PATCH ./:srcEnvId/items/:itemId/moveto/:destEnvId
+async function moveItem(srcEnvId, itemId, destEnvId) {
+  //Check item exists
+  const item = await getItemById(srcEnvId, itemId);
+  const itemCost = Number(item.cost.replace(/[^0-9.-]+/g, ""));
 
-  //Remove item from source envelope
-  DATA[srcEnvelopeIndex].items.splice(itemIndex,1);
+  const srcEnvelope = await(getEnvelope(srcEnvId));
+  //Check destination envelope exists and extract its budget
+  const destEnvelope = await getEnvelope(destEnvId);
+  const destEnvBudget = Number(destEnvelope.budget.replace(/[^0-9.-]+/g, ""));
+
+  //Check destination envelope has budget for item
+  const destEnvBudgetInfo = await getSpendInEnvelope(destEnvId);
+  const { total_cost } = destEnvBudgetInfo.rows[0];
+  const totalCost = total_cost === null ? 0 : Number(total_cost.replace(/[^0-9.-]+/g, ""));
+    
   
-  return DATA[destEnvelopeIndex].items[DATA[destEnvelopeIndex].items.length - 1];
+  if (destEnvBudget - totalCost < itemCost) {
+    const err = new Error("Not enough budget in destination envelope")
+    err.statusCode = 400;
+    throw (err);
+  }
+
+  //Get the highest Id used in envelope
+  const lastId = await getLastId('items', 'sub_id', destEnvId, 'category_id');
+  const nextId = lastId.rows[0].max + 1;
+
+  const output = await query('UPDATE items SET category_id = $1, sub_id = $2 WHERE sub_id = $3 AND category_id = $4 RETURNING *;', [destEnvId, nextId, itemId, srcEnvId]);
+  logTransaction(srcEnvId, `Item ${itemId} '${item.name}' moved from ${srcEnvId} '${srcEnvelope.name}' to ${destEnvId} '${destEnvelope.name}'. New item id ${nextId}`);
+  return output.rows[0];
 }
 
-//Utility Functions
+// Helper Queries
 
-function getNewId(data) {
-  let newId = 1;
-  let foundId = false;
-  while (!foundId) {
-    foundId = true;
-    for (let dataIndex in data) {
-      if (data[dataIndex].id === newId) {
-        newId++;
-        foundId = false;
-        break;
-      }
-    }
-  }
-  return newId;
+//Checks if a value is not already present in table.column
+function checkValueIsUnique(tableName, columnName, value) {
+  const statement = `SELECT id, ${columnName} FROM ${tableName} WHERE LOWER(${columnName}) = '${value.toLowerCase()}'`;
+  const result = query(statement)
+  return result;
 }
 
-function sumOfEnvelopeItems(envIndex) {
-  let sumOfItems = 0;
-  DATA[envIndex].items.forEach(item => sumOfItems += item.cost);
-  return sumOfItems;
+//Function called by POST routes to return the highest id in a table
+//If only tableName is provided, it returns highest in 'id' column
+function getLastId(tableName, subIdColumnName, supId, supIdColumnName) {
+  let statement = `SELECT MAX(${subIdColumnName || 'id'}) FROM ${tableName}`;
+  if (supId) {
+    statement += ` WHERE ${supIdColumnName} = ${supId}`
+  }
+  const result = query(statement);
+  return result;
+}
+
+//Function returning the available budget in an envelope
+function getSpendInEnvelope(envId) {
+  const statement = `
+    SELECT SUM(cost) AS total_cost
+    FROM items
+    WHERE category_id = ${envId}`;
+  const result = query(statement);
+  return result;
+}
+
+//Logging transactions
+function logTransaction(envId, transactionDescription) {
+  query('INSERT INTO transactions VALUES (NOW(), $1, $2)', [envId, transactionDescription]);
+  return null;
 }
 
 module.exports = {
-  DATA,
   getAllEnvelopes,
   getEnvelope,
   addNewEnvelope,

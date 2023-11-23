@@ -1,0 +1,868 @@
+openapi: 3.0.3
+info:
+  title: Personal Budget Part II
+  version: '1.0'
+  description: >-
+    Extend the Personal Budget API created in Personal Budget, Part I, to
+    include persisting data
+servers:
+  - url: http://localhost:4001/envelopes
+    variables: {}
+paths:
+  /:
+    summary: Access to envelopes
+    get:
+      summary: Get all envelopes
+      description: Returns array of all envelopes
+      operationId: get_envelopes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                All envelopes:
+                  value: |-
+                    [
+                        {
+                            "id": 1,
+                            "name": "Travel",
+                            "description": "Travel Expenses",
+                            "budget": "£56.00"
+                        },
+                        {
+                            "id": 2,
+                            "name": "Foods",
+                            "description": "Food expenses",
+                            "budget": "£1,080.00"
+                        }
+                    ]
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+    post:
+      summary: Creates new envelope
+      description: Creates a new envelope and returns it
+      operationId: post_envelope
+      parameters:
+        - name: name
+          in: query
+          description: A unique name for the new envelope
+          required: true
+          schema:
+            type: string
+        - name: description
+          in: query
+          description: A description for the new envelope
+          required: true
+          schema:
+            type: string
+        - name: budget
+          in: query
+          description: A budget for the new envelope
+          required: true
+          schema:
+            type: number
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              examples:
+                Envelope created:
+                  value: |-
+                    {
+                        "id": 7,
+                        "name": "Travel",
+                        "description": "Travel expenses",
+                        "budget": "£100.00"
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Non-number budget value:
+                  value: The budget value has to be a number
+                Negative budget value:
+                  value: The budget value cannot be negative
+                Envelope name exists:
+                  value: The envelope name has to be unique
+                Missing required parameters:
+                  value: 'Missing required parameters: [name, description, budget]'
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+  /{id}:
+    summary: Specific envelope operations
+    description: Path for envelope operations
+    get:
+      summary: Get specific envelope
+      description: Returns a specific envelope by its id
+      operationId: get_envelope
+      parameters:
+        - name: id
+          in: path
+          description: The id of the envelope
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Envelope:
+                  value: |-
+                    {
+                        "id": 1,
+                        "name": "Travel",
+                        "description": "Travel Expenses",
+                        "budget": "£56.00"
+                    }
+        '400':
+          description: BAD REQUEST
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                No such envelope:
+                  value: No such envelope ID 1
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+    put:
+      summary: Update all envelope's fields
+      description: Updates an existing envelope and returns it
+      operationId: put_envelope
+      parameters:
+        - name: id
+          in: path
+          description: The id of the envelope
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: A unique name for the new envelope
+          required: true
+          schema:
+            type: string
+        - name: description
+          in: query
+          description: A description for the new envelope
+          required: true
+          schema:
+            type: string
+        - name: budget
+          in: query
+          description: A budget for the new envelope
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Envelope updated:
+                  value: |-
+                    {
+                        "id": 7,
+                        "name": "Travel",
+                        "description": "Travel expenses",
+                        "budget": "£100.00"
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Missing required parameters:
+                  value: 'Missing required parameters: name, description, budget'
+                No such envelope:
+                  value: No such envelope ID 1
+                Non-number budget value:
+                  value: The budget value has to be a number
+                Negative budget value:
+                  value: The budget value cannot be negative
+                Envelope name exists:
+                  value: The envelope name has to be unique
+                Budget value less than current spend:
+                  value: The budget value has to be at least 10
+                  description: >-
+                    The value for the envelope's budget cannot be less than the
+                    total cost of existing items in the envelope
+                No update:
+                  value: Nothing to be updated
+                  description: Supplied values already match the envelope's
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+    patch:
+      summary: Update envelope
+      description: Updates an existing envelope and returns it
+      operationId: patch_envelope
+      parameters:
+        - name: id
+          in: path
+          description: The id of the envelope
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: A unique name for the new envelope
+          required: false
+          schema:
+            type: string
+        - name: description
+          in: query
+          description: A description for the new envelope
+          required: false
+          schema:
+            type: string
+        - name: budget
+          in: query
+          description: A budget for the new envelope
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Envelope updated:
+                  value: |-
+                    {
+                        "id": 7,
+                        "name": "Travel",
+                        "description": "Travel expenses",
+                        "budget": "£100.00"
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                No valid parameters:
+                  value: No valid parameter provided (name/description/budget)
+                  description: None of an envelope's parameters has been supplied
+                No such envelope:
+                  value: No such envelope ID 1
+                Non-number budget value:
+                  value: The budget value has to be a number
+                Negative budget value:
+                  value: The budget value cannot be negative
+                Envelope name exists:
+                  value: The envelope name has to be unique
+                Budget value less than current spend:
+                  value: The budget value has to be at least 10
+                  description: >-
+                    The value for the envelope's budget cannot be less than the
+                    total cost of existing items in the envelope
+                No update:
+                  value: Nothing to be updated
+                  description: Supplied values already match the envelope's
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+    delete:
+      summary: Deletes an envelope
+      description: Deletes an existing envelope. Can only delete empty envelopes
+      operationId: delete_envelope
+      parameters:
+        - name: id
+          in: path
+          description: The id of the envelope to be deleted
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No content
+        '400':
+          description: BAD REQUEST
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                No such envelope:
+                  value: No such envelope ID 1
+                Envelope not empty:
+                  value: Envelope has items
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+  /{srcEnvId}/transferto/{destEnvId}:
+    summary: Transfer budget from an envelope to another
+    patch:
+      summary: Transfers budget between envelopes
+      description: >-
+        Transfers the supplied amount from the budget of an envelope to another
+        envelope, returns array with updated envelopes
+      operationId: transfer_budget
+      parameters:
+        - name: srcEnvId
+          in: path
+          description: The id of the source envelope
+          required: true
+          schema:
+            type: integer
+        - name: destEnvId
+          in: path
+          description: The id of the destination envelope
+          required: true
+          schema:
+            type: integer
+        - name: amount
+          in: query
+          description: Amount to be transfered
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Updated envelopes:
+                  value: |-
+                    [
+                        {
+                            "id": 1,
+                            "name": "Travel",
+                            "description": "Travel expenses",
+                            "budget": "£90.00"
+                        },
+                        {
+                            "id": 2,
+                            "name": "Groceries",
+                            "description": "Groceries Expenses",
+                            "budget": "£66.00"
+                        }
+                    ]
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad source envelope id:
+                  value: Envelope id should be a positive integer.
+                Bad destination envelope id:
+                  value: Destination envelope id should be a positive integer.
+                No amount specified:
+                  value: Amount to be transferred needed
+                Same source and destination:
+                  value: Source and destination envelopes cannot be the same
+                Amount not a number:
+                  value: The amount value has to be a number
+                Amount not positive:
+                  value: The amount value has to be a positive number
+                None of the envelopes exist:
+                  value: Non-existent envelopes
+                Source envelope doesn't exist:
+                  value: Source envelope does not exist
+                Destination envelope doesn't exist:
+                  value: Destination envelope does not exist
+                Not enough budget available:
+                  value: Maximum available to transfer is <value>
+                  description: The amount to be transfered exceeds the available budget in source envelope
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Envelopes
+  /{envId}/items/:
+    summary: Get items in envelope
+    get:
+      summary: Get all items in envelope
+      description: Returns an array of all items in an envelope
+      operationId: get_items
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the envelope
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Items from envelope:
+                  value: |-
+                    [
+                        {
+                            "sub_id": 1,
+                            "name": "Book",
+                            "cost": "£6.00",
+                            "category_id": 2
+                        },
+                        {
+                            "sub_id": 2,
+                            "name": "Newspaper",
+                            "cost": "£10.00",
+                            "category_id": 2
+                        }
+                    ]
+        '400':
+          description: BAD REQUEST
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                No such envelope:
+                  value: No such envelope ID 1
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+    post:
+      summary: Creates new envelope
+      description: Creates a new envelope and returns it
+      operationId: post_item
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the envelope
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: Name for the item
+          required: true
+          schema:
+            type: string
+        - name: cost
+          in: query
+          description: Cost of the item
+          required: true
+          schema:
+            type: number
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              examples:
+                Envelope created:
+                  value: |-
+                    {
+                        "sub_id": 3,
+                        "name": "Bus ticket",
+                        "cost": "£5.00",
+                        "category_id": 1
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Missing required parameters:
+                  value: 'Missing required parameters: name, cost'
+                No such envelope:
+                  value: No such envelope ID 1
+                Non-number cost value:
+                  value: Cost should be a number
+                Negative cost value:
+                  value: Cost should be a positive number
+                Cost value exceeds available budget:
+                  value: Available budget in envelope is <value>
+                  description: The new item's cost exceeds available budget in envelope
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+  /{envId}/items/{itemId}:
+    summary: Operations with items
+    get:
+      summary: Retrieve an item
+      description: Retrieve an item by envelope id and item id
+      operationId: get_item
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the item's envelope
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          description: The id of the item
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              examples:
+                Item returned:
+                  value: |-
+                    {
+                        "sub_id": 1,
+                        "name": "Book",
+                        "cost": "£6.00",
+                        "category_id": 2
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Bad item id:
+                  value: Item id should be a positive integer
+                No such envelope:
+                  value: No such envelope ID 1
+                No such item:
+                  value: No such item
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+    put:
+      summary: Update all item's fields
+      description: Updates an existing item and returns it
+      operationId: put_item
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the item's envelope
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          description: The id of the item to be updated
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: Name for the item
+          required: true
+          schema:
+            type: string
+        - name: cost
+          in: query
+          description: Cost of the item
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Item updated:
+                  value: |-
+                    {
+                        "sub_id": 1,
+                        "name": "Book",
+                        "cost": "£7.00",
+                        "category_id": 2
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Bad item id:
+                  value: Item id should be a positive integer
+                Missing required parameters:
+                  value: 'Missing required parameters: name, cost'
+                No such envelope:
+                  value: No such envelope ID 1
+                No such item:
+                  value: No such item
+                Non-number cost value:
+                  value: The cost value has to be a number
+                Negative cost value:
+                  value: The cost value has to be a positive number
+                Envelope name exists:
+                  value: The envelope name has to be unique
+                Cost value exceeds available budget:
+                  value: New cost exceeds <value>
+                  description: >-
+                    The value of the item exceeds available budget in the
+                    envelope
+                No update:
+                  value: Nothing to be updated
+                  description: Supplied values already match the item's
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+    patch:
+      summary: Update an item's fields
+      description: Updates an existing item and returns it
+      operationId: patch_item
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the item's envelope
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          description: The id of the item to be updated
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: Name for the item
+          required: false
+          schema:
+            type: string
+        - name: cost
+          in: query
+          description: Cost of the item
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Item updated:
+                  value: |-
+                    {
+                        "sub_id": 1,
+                        "name": "Book",
+                        "cost": "£7.00",
+                        "category_id": 2
+                    }
+        '400':
+          description: Bad Request
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Bad item id:
+                  value: Item id should be a positive integer
+                No valid parameters:
+                  value: No valid parameters found (name/cost)
+                  description: None of an item's parameters has been supplied
+                No such envelope:
+                  value: No such envelope ID 1
+                No such item:
+                  value: No such item
+                Non-number cost value:
+                  value: The cost value has to be a number
+                Negative cost value:
+                  value: The cost value has to be a positive number
+                Cost value exceeds available budget:
+                  value: New cost exceeds <value>
+                  description: >-
+                    The value of the item exceeds available budget in the
+                    envelope
+                No update:
+                  value: Nothing to be updated
+                  description: Supplied values already match the item's
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+    delete:
+      summary: Deletes an item
+      description: Deletes an existing item
+      operationId: delete_item
+      parameters:
+        - name: envId
+          in: path
+          description: The id of the item's envelope
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          description: The id of the item to be updated
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No content
+        '400':
+          description: BAD REQUEST
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad envelope id:
+                  value: Envelope id should be a positive integer
+                Bad item id:
+                  value: Item id should be a positive integer
+                No such envelope:
+                  value: No such envelope ID 1
+                No such item:
+                  value: No such item
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
+  /{srcEnvId}/items/{itemId}/moveTo/{destEnvId}:
+    summary: Move an item
+    description: Move an item to a different envelope
+    patch:
+      summary: Move an item
+      description: Move an item to a different envelope
+      operationId: move_item
+      parameters:
+        - name: srcEnvId
+          in: path
+          description: The id of the item's envelope
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          description: The id of the item to be moved
+          required: true
+          schema:
+            type: integer
+        - name: destEnvId
+          in: path
+          description: The id of the destination envelope
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              examples:
+                Updated item:
+                  value: |-
+                    {
+                        "sub_id": 4,
+                        "name": "Book",
+                        "cost": "£7.00",
+                        "category_id": 1
+                    }
+        '400':
+          description: BAD REQUEST
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Bad source envelope id:
+                  value: Envelope id should be a positive integer
+                Bad destination envelope id:
+                  value: Destination envelope id should be a positive integer
+                Bad item id:
+                  value: Item id should be a positive integer
+                No such envelope:
+                  value: No such envelope ID 1
+                No such item:
+                  value: No such item
+                Not enough budget:
+                  value: Not enough budget in destination envelope
+                  description: Item's cost exceeds available budget in destination envelope
+        '500':
+          description: Internal Server Error
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Internal server error:
+                  value: connect ECONNREFUSED 127.0.0.1:5432
+      tags:
+        - Items
