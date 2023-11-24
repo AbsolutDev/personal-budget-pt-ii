@@ -38,12 +38,7 @@ paths:
                         }
                     ]
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
     post:
@@ -89,20 +84,15 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Non-number budget value:
-                  value: The budget value has to be a number
+                  $ref: "#/components/examples/nan_budget"
                 Negative budget value:
-                  value: The budget value cannot be negative
+                  $ref: "#/components/examples/neg_budget"
                 Envelope name exists:
-                  value: The envelope name has to be unique
+                  $ref: "#/components/examples/dup_env_name"
                 Missing required parameters:
-                  value: 'Missing required parameters: [name, description, budget]'
+                  $ref: "#/components/examples/env_missing_all_params"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
   /{id}:
@@ -139,16 +129,11 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
     put:
@@ -200,32 +185,23 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Missing required parameters:
-                  value: 'Missing required parameters: name, description, budget'
+                  $ref: "#/components/examples/env_missing_all_params"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 Non-number budget value:
-                  value: The budget value has to be a number
+                  $ref: "#/components/examples/nan_budget"
                 Negative budget value:
-                  value: The budget value cannot be negative
+                  $ref: "#/components/examples/neg_budget"
                 Envelope name exists:
-                  value: The envelope name has to be unique
+                  $ref: "#/components/examples/dup_env_name"
                 Budget value less than current spend:
-                  value: The budget value has to be at least 10
-                  description: >-
-                    The value for the envelope's budget cannot be less than the
-                    total cost of existing items in the envelope
+                  $ref: "#/components/examples/budget_lt_spend"
                 No update:
-                  value: Nothing to be updated
-                  description: Supplied values already match the envelope's
+                  $ref: "#/components/examples/env_no_update"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
     patch:
@@ -277,33 +253,24 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 No valid parameters:
                   value: No valid parameter provided (name/description/budget)
                   description: None of an envelope's parameters has been supplied
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 Non-number budget value:
-                  value: The budget value has to be a number
+                  $ref: "#/components/examples/nan_budget"
                 Negative budget value:
-                  value: The budget value cannot be negative
+                  $ref: "#/components/examples/neg_budget"
                 Envelope name exists:
-                  value: The envelope name has to be unique
+                  $ref: "#/components/examples/dup_env_name"
                 Budget value less than current spend:
-                  value: The budget value has to be at least 10
-                  description: >-
-                    The value for the envelope's budget cannot be less than the
-                    total cost of existing items in the envelope
+                  $ref: "#/components/examples/budget_lt_spend"
                 No update:
-                  value: Nothing to be updated
-                  description: Supplied values already match the envelope's
+                  $ref: "#/components/examples/env_no_update"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
     delete:
@@ -326,18 +293,13 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 Envelope not empty:
                   value: Envelope has items
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
   /{srcEnvId}/transferto/{destEnvId}:
@@ -395,9 +357,9 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad source envelope id:
-                  value: Envelope id should be a positive integer.
+                  $ref: "#/components/examples/bad_src_env_id"
                 Bad destination envelope id:
-                  value: Destination envelope id should be a positive integer.
+                  $ref: "#/components/examples/bad_dest_env_id"
                 No amount specified:
                   value: Amount to be transferred needed
                 Same source and destination:
@@ -416,12 +378,7 @@ paths:
                   value: Maximum available to transfer is <value>
                   description: The amount to be transfered exceeds the available budget in source envelope
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Envelopes
   /{envId}/items/:
@@ -465,16 +422,11 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
     post:
@@ -520,25 +472,19 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Missing required parameters:
-                  value: 'Missing required parameters: name, cost'
+                  $ref: "#/components/examples/item_missing_all_params"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 Non-number cost value:
-                  value: Cost should be a number
+                  $ref: "#/components/examples/nan_cost"
                 Negative cost value:
-                  value: Cost should be a positive number
+                  $ref: "#/components/examples/neg_cost"
                 Cost value exceeds available budget:
-                  value: Available budget in envelope is <value>
-                  description: The new item's cost exceeds available budget in envelope
+                  $ref: "#/components/examples/cost_exceeds_budget"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
   /{envId}/items/{itemId}:
@@ -580,20 +526,15 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Bad item id:
-                  value: Item id should be a positive integer
+                  $ref: "#/components/examples/bad_item_id"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 No such item:
-                  value: No such item
+                  $ref: "#/components/examples/no_item"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
     put:
@@ -645,36 +586,27 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Bad item id:
-                  value: Item id should be a positive integer
+                  $ref: "#/components/examples/bad_item_id"
                 Missing required parameters:
-                  value: 'Missing required parameters: name, cost'
+                  $ref: "#/components/examples/item_missing_all_params"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 No such item:
-                  value: No such item
+                  $ref: "#/components/examples/no_item"
                 Non-number cost value:
-                  value: The cost value has to be a number
+                  $ref: "#/components/examples/nan_cost"
                 Negative cost value:
-                  value: The cost value has to be a positive number
+                  $ref: "#/components/examples/neg_cost"
                 Envelope name exists:
-                  value: The envelope name has to be unique
+                  $ref: "#/components/examples/dup_env_name"
                 Cost value exceeds available budget:
-                  value: New cost exceeds <value>
-                  description: >-
-                    The value of the item exceeds available budget in the
-                    envelope
+                  $ref: "#/components/examples/cost_exceeds_budget"
                 No update:
-                  value: Nothing to be updated
-                  description: Supplied values already match the item's
+                  $ref: "#/components/examples/item_no_update"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
     patch:
@@ -726,35 +658,26 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Bad item id:
-                  value: Item id should be a positive integer
+                  $ref: "#/components/examples/bad_item_id"
                 No valid parameters:
                   value: No valid parameters found (name/cost)
                   description: None of an item's parameters has been supplied
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 No such item:
-                  value: No such item
+                  $ref: "#/components/examples/no_item"
                 Non-number cost value:
-                  value: The cost value has to be a number
+                  $ref: "#/components/examples/nan_cost"
                 Negative cost value:
-                  value: The cost value has to be a positive number
+                  $ref: "#/components/examples/neg_cost"
                 Cost value exceeds available budget:
-                  value: New cost exceeds <value>
-                  description: >-
-                    The value of the item exceeds available budget in the
-                    envelope
+                  $ref: "#/components/examples/cost_exceeds_budget"
                 No update:
-                  value: Nothing to be updated
-                  description: Supplied values already match the item's
+                  $ref: "#/components/examples/item_no_update"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
     delete:
@@ -783,20 +706,15 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_env_id"
                 Bad item id:
-                  value: Item id should be a positive integer
+                  $ref: "#/components/examples/bad_item_id"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 No such item:
-                  value: No such item
+                  $ref: "#/components/examples/no_item"
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
   /{srcEnvId}/items/{itemId}/moveTo/{destEnvId}:
@@ -845,24 +763,70 @@ paths:
             text/plain; charset=utf-8:
               examples:
                 Bad source envelope id:
-                  value: Envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_src_env_id"
                 Bad destination envelope id:
-                  value: Destination envelope id should be a positive integer
+                  $ref: "#/components/examples/bad_dest_env_id"
                 Bad item id:
-                  value: Item id should be a positive integer
+                  $ref: "#/components/examples/bad_item_id"
                 No such envelope:
-                  value: No such envelope ID 1
+                  $ref: "#/components/examples/no_envelope"
                 No such item:
-                  value: No such item
+                  $ref: "#/components/examples/no_item"
                 Not enough budget:
                   value: Not enough budget in destination envelope
                   description: Item's cost exceeds available budget in destination envelope
+                
         '500':
-          description: Internal Server Error
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Internal server error:
-                  value: connect ECONNREFUSED 127.0.0.1:5432
+          $ref: "#/components/responses/serverError"
       tags:
         - Items
+components:
+  responses:
+    serverError:
+      description: Internal Server Error
+      content:
+        text/plain; charset=utf-8:
+          examples:
+            Internal server error:
+              value: connect ECONNREFUSED 127.0.0.1:5432
+  examples:
+    nan_budget:
+      value: The budget value has to be a number
+    neg_budget:
+      value: The budget value cannot be negative
+    dup_env_name:
+      value: The envelope name has to be unique
+    env_missing_all_params:
+      value: 'Missing required parameters: [name, description, budget]'
+    item_missing_all_params:
+      value: 'Missing required parameters: name, cost'
+    no_envelope:
+      value: No such envelope ID 1
+    bad_env_id:
+      value: Envelope id should be a positive integer
+    bad_src_env_id:
+      value: Envelope id should be a positive integer.
+    bad_dest_env_id:
+      value: Destination envelope id should be a positive integer.
+    budget_lt_spend:
+      value: The budget value has to be at least 10
+      description: >-
+        The value for the envelope's budget cannot be less than the
+        total cost of existing items in the envelope
+    env_no_update:
+      value: Nothing to be updated
+      description: Supplied values already match the envelope's
+    item_no_update:
+      value: Nothing to be updated
+      description: Supplied values already match the item's
+    nan_cost:
+      value: Cost should be a number
+    neg_cost:
+      value: Cost should be a positive number
+    cost_exceeds_budget:
+      value: Available budget in envelope is <value>
+      description: The new item's cost exceeds available budget in envelope
+    bad_item_id:
+      value: Item id should be a positive integer
+    no_item:
+      value: No such item
